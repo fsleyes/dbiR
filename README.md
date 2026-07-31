@@ -2,13 +2,9 @@
 
 An R package for measuring behavioral asymmetry in text message conversations.
 
-The central idea is that a lot of what you'd want to know about a relationship
-is visible in the metadata rather than the content. Who texts first. Who waits
-longer to reply. Whose message goes unanswered. You don't need to read the
-messages to see the shape of it.
+Have you ever felt like you wanted to quantify exactly how uninterested someone is in you as a potential romantic partner? Well now you can!
 
-`dbiR` reads iMessage exports, computes five of these asymmetry measures per
-conversation, and combines them into one score — the Down Bad Index. A high
+`dbiR` reads iMessage exports, computes five measures of behavioral asymmetry (eg. who initiates conversations more often), and combines them into one score — the Down Bad Index. A high
 score means you're the one doing the reaching.
 
 ## Installing
@@ -19,6 +15,8 @@ devtools::install_github("fsleyes/dbiR")
 ```
 
 ## Getting your messages out of iMessage
+
+Note: for now, you can only do this analysis if you have an iPhone and are able to pull your messages out of iCloud.
 
 This is the annoying part, and it's not something the package can do for you.
 Use [imessage-exporter](https://github.com/ReagentX/imessage-exporter):
@@ -64,15 +62,17 @@ dbi(messages,
     date_max      = "01-01-2024")
 ```
 
-`sec_threshold` matters more than it looks like it should. It defines where one
+`sec_threshold` matters and it will differ based on your own texting rhythms. It defines where one
 conversation stops and the next begins, which in turn defines who initiated and
-who got left hanging. Two days is a reasonable default for close friends and
-too short for people you talk to a few times a year.
+who got left hanging. Two days may be a reasonable default for close friends and may be
+too short for people you talk to a few times a year. You will have to pick one for yourself.
+
+You can ignore messages that are shorter (eg. maybe if you don't care about data from acquaintances) using the message_min parameter, which allows you to filter out contacts with a minimum no. of messages
 
 ## What the five components are
 
 Every component is a ratio oriented the same way, so above 1 always means
-you're the one leaning in:
+you're the one leaning in (ie. you are more down bad for them):
 
 - **`init_ratio`** — how often you start a conversation vs. how often they do
 - **`rt_ratio`** — how long they take to reply vs. how long you take
@@ -106,7 +106,7 @@ heaviest and word count lightest:
 init_ratio 0.30, rt_ratio 0.25, message_ratio 0.25, end_ratio 0.15, word_ratio 0.05
 ```
 
-That CFA was run on one person's message history. Treat the weights as a
+That CFA was run on my own message history. Treat the weights as a
 reasonable starting point, not as a validated instrument. If you disagree with
 them, pass your own — they just have to be a named list summing to 1:
 
@@ -115,6 +115,8 @@ dbi(messages, speaker_str = "Your Name",
     weights = list(init_ratio = 0.5, rt_ratio = 0.5, message_ratio = 0,
                    end_ratio = 0, word_ratio = 0))
 ```
+
+Feel free to play around with the weights if you feel like you think some constructs are more important than others.
 
 ## The other half: message content
 
@@ -132,6 +134,8 @@ plot_dyadic_emotion_grid(words,
 ```
 
 `names(lookup_Jul25)` lists the available dimensions.
+
+This is a fun way to visualize the emotional context of your text messages with other people across time. Sometimes you can pinpoint inflection points that symbolize 
 
 ### Two pipelines, two settings
 
@@ -174,7 +178,7 @@ defaults (`FALSE`), which is what they're set to for exactly this reason.
 
 ## Caveats
 
-The measures are only as good as the export. Reactions, edits, unsends, and
+Reactions, edits, unsends, and
 messages sent from a different number all shift the counts in ways the package
 can't see.
 
@@ -187,9 +191,6 @@ ending) are dropped rather than scored, since the ratio has a zero denominator.
 This means the most lopsided threads can be missing from the output entirely,
 which is worth remembering when you're looking at the ranking.
 
-And the obvious one: this measures asymmetry, not affection. Someone who texts
-you less might be busy, bad at texting, or seeing you in person constantly. The
-number is a description of a pattern, not a verdict.
 
 ## Trying it without your own data
 
