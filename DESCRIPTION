@@ -1,0 +1,36 @@
+Package: dbiR
+Title: Quantify Behavioral Asymmetry in Text Message Conversations
+Version: 0.0.0.9000
+Authors@R:
+    person("Shawn", "Wang", , "shawn.wang.1667@gmail.com", role = c("aut", "cre"))
+Description: Tools for reading exported iMessage conversation threads and
+    scoring dyadic conversations on behavioral asymmetry. Parses raw
+    'imessage-exporter' text files into tidy message-level data, cleans and
+    tokenizes message text against lexical and emotion norms, and computes the
+    Down Bad Index (DBI): a weighted composite of five per-conversation ratios
+    capturing who initiates exchanges, who replies faster, who is left on read,
+    and who sends more words and messages.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 3.5)
+LazyData: true
+LazyDataCompression: xz
+Imports: 
+    dplyr,
+    forcats,
+    ggplot2,
+    lubridate,
+    magrittr,
+    purrr,
+    stringi,
+    stringr,
+    textstem,
+    tibble,
+    tidyr
+Suggests: 
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3

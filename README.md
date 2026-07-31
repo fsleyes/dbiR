@@ -1,0 +1,211 @@
+# dbiR
+
+An R package for measuring behavioral asymmetry in text message conversations.
+
+The central idea is that a lot of what you'd want to know about a relationship
+is visible in the metadata rather than the content. Who texts first. Who waits
+longer to reply. Whose message goes unanswered. You don't need to read the
+messages to see the shape of it.
+
+`dbiR` reads iMessage exports, computes five of these asymmetry measures per
+conversation, and combines them into one score — the Down Bad Index. A high
+score means you're the one doing the reaching.
+
+## Installing
+
+```r
+# install.packages("devtools")
+devtools::install_github("fsleyes/dbiR")
+```
+
+## Getting your messages out of iMessage
+
+This is the annoying part, and it's not something the package can do for you.
+Use [imessage-exporter](https://github.com/ReagentX/imessage-exporter):
+
+```bash
+imessage-exporter -f txt -o ~/imessage_export
+```
+
+You'll get one `.txt` file per conversation, named after the participants'
+phone numbers. `dbiR` expects that directory as-is.
+
+A few threads get dropped on the way in, deliberately: group chats (more than
+two people breaks every ratio the package computes), threads with only one
+speaker, and threads where a participant is identified by a bare phone number
+instead of a saved contact name. If you get fewer conversations back than you
+expected, that's usually why.
+
+## Using it
+
+```r
+library(dbiR)
+
+messages <- read_imessages("~/imessage_export", speaker_name = "Your Name")
+scored   <- dbi(messages, speaker_str = "Your Name")
+```
+
+`scored` is one row per conversation, sorted worst-first. The columns you
+probably care about:
+
+```r
+scored[, c("other_recipient", "dbi", "init_ratio", "rt_ratio_median",
+           "end_ratio", "word_ratio", "message_ratio")]
+```
+
+Most of the arguments are about deciding what counts:
+
+```r
+dbi(messages,
+    speaker_str   = "Your Name",
+    sec_threshold = 172800,        # 48h of silence ends a conversation
+    message_min   = 1000,          # ignore threads shorter than this
+    date_min      = "01-01-2022",
+    date_max      = "01-01-2024")
+```
+
+`sec_threshold` matters more than it looks like it should. It defines where one
+conversation stops and the next begins, which in turn defines who initiated and
+who got left hanging. Two days is a reasonable default for close friends and
+too short for people you talk to a few times a year.
+
+## What the five components are
+
+Every component is a ratio oriented the same way, so above 1 always means
+you're the one leaning in:
+
+- **`init_ratio`** — how often you start a conversation vs. how often they do
+- **`rt_ratio`** — how long they take to reply vs. how long you take
+- **`end_ratio`** — how often they let the conversation drop vs. how often you do
+- **`message_ratio`** — messages you send vs. messages they send
+- **`word_ratio`** — words you write vs. words they write
+
+The index takes the log of each (so texting twice as much and half as much are
+the same distance from balanced), divides by the standard deviation without
+centering, and takes a weighted sum. Not centering is deliberate: it keeps zero
+meaning "actually balanced" rather than "average for whoever happens to be in
+your phone."
+
+To see why a particular person scored the way they did, rather than just that
+they did:
+
+```r
+plot_dbi_components(scored)
+```
+
+Two people can land on the same score for opposite reasons — one because you
+always text first, another because you write paragraphs and get back "k". The
+component plot separates those.
+
+## About the weights
+
+The defaults come from a confirmatory factor analysis, loading initiation
+heaviest and word count lightest:
+
+```
+init_ratio 0.30, rt_ratio 0.25, message_ratio 0.25, end_ratio 0.15, word_ratio 0.05
+```
+
+That CFA was run on one person's message history. Treat the weights as a
+reasonable starting point, not as a validated instrument. If you disagree with
+them, pass your own — they just have to be a named list summing to 1:
+
+```r
+dbi(messages, speaker_str = "Your Name",
+    weights = list(init_ratio = 0.5, rt_ratio = 0.5, message_ratio = 0,
+                   end_ratio = 0, word_ratio = 0))
+```
+
+## The other half: message content
+
+Separately from the behavioral metrics, `clean_messages()` tokenizes message
+text and normalizes it against a bundled table of lexical and emotion norms
+(`lookup_Jul25`, ~156k words):
+
+```r
+words <- clean_messages(messages, wordcol = "text",
+                        omit_stops = TRUE, lemmatize = TRUE)
+
+plot_dyadic_emotion_grid(words,
+                         people = c("Your Name", "Someone Else"),
+                         sentiment = c("emo_happiness", "emo_anxiety"))
+```
+
+`names(lookup_Jul25)` lists the available dimensions.
+
+### Two pipelines, two settings
+
+These are separate paths through the package and they want opposite cleaning
+settings. Getting this backwards is the easiest way to produce numbers that
+look fine and aren't.
+
+**Emotion analysis — `omit_stops = TRUE`, `lemmatize = TRUE`.**
+
+```r
+messages <- read_imessages(dir, speaker_name = "Your Name")
+words    <- clean_messages(messages, wordcol = "text",
+                           omit_stops = TRUE, lemmatize = TRUE)
+plot_dyadic_emotion_grid(words, people = c(...), sentiment = c(...))
+```
+
+Here you want both on. Stopwords ("the", "and", "i") carry no emotional signal
+and just dilute the averages, and lemmatizing means "running" and "ran" both
+find "run" in the norms table instead of missing it.
+
+**Down Bad Index — `omit_stops = FALSE`, `lemmatize = FALSE`.**
+
+```r
+messages <- read_imessages(dir, speaker_name = "Your Name")
+scored   <- dbi(messages, speaker_str = "Your Name")
+```
+
+`dbi()` reads the raw `text` column and doesn't need `clean_messages()` at all,
+so in normal use this is handled for you — just pass it the output of
+`read_imessages()` directly.
+
+It matters if you clean first and then feed the result in. Stopword removal
+blanks those words out, and a short message made entirely of them ("ok",
+"yeah", "i know") cleans to nothing and drops out of the data. That doesn't
+just undercount messages: losing the short replies changes where turns begin
+and end, which shifts response times and the initiation and left-on-read counts
+too. Every one of the five components moves, and nothing errors. If you do want
+cleaned text in the DBI path for some reason, leave both arguments at their
+defaults (`FALSE`), which is what they're set to for exactly this reason.
+
+## Caveats
+
+The measures are only as good as the export. Reactions, edits, unsends, and
+messages sent from a different number all shift the counts in ways the package
+can't see.
+
+Response time is the crudest of the five. It can't tell "ignoring you" from
+"asleep," and the 48-hour cap is a blunt instrument for that. The median is
+used by default because a single three-day gap otherwise dominates the mean.
+
+Conversations where one person did all of the initiating (or all of the
+ending) are dropped rather than scored, since the ratio has a zero denominator.
+This means the most lopsided threads can be missing from the output entirely,
+which is worth remembering when you're looking at the ranking.
+
+And the obvious one: this measures asymmetry, not affection. Someone who texts
+you less might be busy, bad at texting, or seeing you in person constantly. The
+number is a description of a pattern, not a verdict.
+
+## Trying it without your own data
+
+The package ships a small synthetic corpus for testing and examples:
+
+```r
+demo <- system.file("extdata", package = "dbiR")
+messages <- read_imessages(demo, speaker_name = "Shawn Wang")
+dbi(messages, speaker_str = "Shawn Wang")
+```
+
+Four conversations, built so each component has a hand-checkable value —
+one lopsided in each direction, one balanced, and one that exercises the
+parser's handling of tapbacks, attachments, read receipts, and multi-paragraph
+messages. The derivations are in `inst/extdata/README.md`.
+
+## License
+
+MIT.
