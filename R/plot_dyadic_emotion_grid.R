@@ -69,10 +69,9 @@ plot_dyadic_emotion_grid <- function(data,
                                      lookup = lookup_Jul25,
                                      subtitle = NULL) {
 
-  # ---- 0. Validate up front -------------------------------------------------
-  # These are cheap checks that turn three different downstream failures
-  # (silent empty plot, recycled color vector, "object not found") into one
-  # clear message at the call site.
+  # ---- 0. validate ---------------------------------------------------------
+  # cheap checks that turn three different downstream failures (empty plot,
+  # recycled color vector, "object not found") into one readable message
   if (length(people) != 2) {
     stop("`people` must contain exactly two names; got ", length(people), ".")
   }
@@ -83,10 +82,9 @@ plot_dyadic_emotion_grid <- function(data,
          paste(missing_cols, collapse = ", "))
   }
 
-  # ---- 1. Restrict to the dyad and attach emotion norms ---------------------
-  # Requiring BOTH speaker and recipient to be in `people` guarantees we only
-  # keep messages exchanged within this pair, not messages either person sent
-  # to someone else.
+  # ---- 1. narrow to the pair, attach norms ---------------------------------
+  # both speaker AND recipient have to be in `people`, otherwise messages
+  # either of them sent to someone else leak in
   data_prep <- data %>%
     filter(!is.na(word_clean)) %>%
     filter(speaker %in% people & recipient %in% people) %>%
@@ -96,12 +94,11 @@ plot_dyadic_emotion_grid <- function(data,
     stop("No messages found between ", people[1], " and ", people[2], ".")
   }
 
-  # ---- 2. Long format, then z-score within each emotion ---------------------
-  # Pivoting first and scaling per emotion group is the whole reason a shared
-  # y-axis is legible: raw norm values live on different ranges per dimension,
-  # so without this the facets could not share a scale. Words absent from the
-  # norms table joined to NA and are dropped here rather than being handed to
-  # the smoother.
+  # ---- 2. long format, z-score within each emotion -------------------------
+  # scaling per emotion is what makes the shared y-axis legible at all - the
+  # raw norm values sit on different ranges per dimension, so the facets
+  # couldn't share a scale otherwise. words that missed the join are dropped
+  # here rather than handed to the smoother.
   data_long <- data_prep %>%
     pivot_longer(cols = all_of(sentiment),
                  names_to = "emotion",
@@ -110,23 +107,23 @@ plot_dyadic_emotion_grid <- function(data,
     group_by(emotion) %>%
     mutate(sentiment_z = as.numeric(scale(raw_value))) %>%
     ungroup() %>%
-    # Facet order follows the order the caller listed the emotions in, not
-    # alphabetical -- the caller's order usually encodes intent.
+    # facets follow the order the caller listed the emotions in, not
+    # alphabetical - that order usually means something
     mutate(emotion = factor(emotion, levels = sentiment),
            emotion = fct_relabel(emotion, clean_emotion_label),
-           # Same for speakers, so color assignment is stable across calls.
+           # same for speakers, so colors stay put across calls
            speaker = factor(speaker, levels = people))
 
-  # ---- 3. Color ------------------------------------------------------------
-  # Categorical (identity) palette: two hues chosen to stay distinguishable
-  # under all common forms of color vision deficiency, which green/red is not.
+  # ---- 3. color ------------------------------------------------------------
+  # identity palette, two hues that stay apart under the common forms of
+  # color vision deficiency (green/red does not)
   speaker_colors <- setNames(c("#2a78d6", "#eb6834"), people)
 
-  # ---- 4. Build the plot ----------------------------------------------------
+  # ---- 4. plot -------------------------------------------------------------
   plot <- data_long %>%
     ggplot(mapping = aes(x = datetime, y = sentiment_z, color = speaker)) +
-    # z = 0 is each speaker's own average for that emotion, so this hairline
-    # is the reference every trend line should be read against.
+    # z = 0 is each speaker's own average for that emotion, so this line is
+    # what the trends should be read against
     geom_hline(yintercept = 0,
                color = "#c3c2b7",
                linewidth = 0.3,
@@ -138,11 +135,10 @@ plot_dyadic_emotion_grid <- function(data,
     facet_wrap(~ emotion, ncol = min(ncol, length(sentiment))) +
     scale_color_manual(values = speaker_colors) +
     scale_fill_manual(values = speaker_colors, guide = "none") +
-    # Dates rather than datetimes on the axis: message threads span months, so
-    # time-of-day is noise at this zoom level.
+    # dates not datetimes - threads span months, so time of day is noise here
     scale_x_datetime(date_labels = "%b %Y") +
-    # Few, round ticks -- the shape of the trend is the message here, not the
-    # third decimal place of a z-score.
+    # few round ticks. the shape of the trend is the point, not the third
+    # decimal of a z-score.
     scale_y_continuous(n.breaks = 5) +
     labs(
       subtitle = subtitle,
@@ -152,8 +148,8 @@ plot_dyadic_emotion_grid <- function(data,
     ) +
     theme_minimal(base_size = 11) +
     theme(
-      # Recessive chrome: the data should be the only thing with weight.
-      # Vertical gridlines are dropped because trends are read horizontally.
+      # keep the chrome light so the data is the only thing with weight.
+      # vertical gridlines go because trends here are read left to right.
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
       panel.grid.major.y = element_line(color = "#e1e0d9", linewidth = 0.3),
@@ -166,8 +162,8 @@ plot_dyadic_emotion_grid <- function(data,
       plot.title.position = "plot",
       axis.title.y = element_text(size = 9, color = "#52514e"),
       axis.text = element_text(size = 8, color = "#898781"),
-      # Legend on top reads as a key to the whole figure rather than to the
-      # last facet, which is how a right-hand legend tends to scan.
+      # legend on top reads as a key to the whole figure. on the right it
+      # tends to look like it belongs to the last facet.
       legend.position = "top",
       legend.justification = "left",
       legend.text = element_text(size = 10, color = "#0b0b0b")

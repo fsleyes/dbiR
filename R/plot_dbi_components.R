@@ -56,16 +56,16 @@ plot_dbi_components <- function(dbi_df,
                                 ncol = 4,
                                 subtitle = NULL) {
 
-  # ---- 0. Validate up front -------------------------------------------------
+  # ---- 0. validate ---------------------------------------------------------
   if (!rt %in% c("median", "mean")) {
     stop("`rt` must be \"median\" or \"mean\".")
   }
 
   rt_col <- paste0("rt_ratio_", rt, "_log_z")
 
-  # The z-scored logs are what actually get weighted and summed into `dbi`,
-  # so those are the columns worth showing -- they explain the score rather
-  # than merely accompanying it.
+  # the z-scored logs are what actually get weighted and summed into dbi, so
+  # they're the columns that explain the score. the raw ratios would just sit
+  # next to it.
   component_cols <- c("init_ratio_log_z",
                       rt_col,
                       "message_ratio_log_z",
@@ -82,10 +82,10 @@ plot_dbi_components <- function(dbi_df,
          "?")
   }
 
-  # ---- 1. One row per partner, top n by DBI --------------------------------
-  # dbi() is keyed by (convo_num, other_recipient), so the same person can in
-  # principle appear on more than one row. Sorting by dbi first and keeping the
-  # first occurrence means we show each partner once, at their strongest score.
+  # ---- 1. one row per partner, top n --------------------------------------
+  # dbi() is keyed on (convo_num, other_recipient), so someone can turn up on
+  # more than one row. sort first, then take the first occurrence, so each
+  # person appears once at their highest score.
   dbi_ranked <- dbi_df %>%
     filter(!is.na(other_recipient), !is.na(dbi)) %>%
     arrange(desc(dbi)) %>%
@@ -96,9 +96,9 @@ plot_dbi_components <- function(dbi_df,
     stop("No scored conversations to plot.")
   }
 
-  # ---- 2. Long format, one row per partner x component ---------------------
-  # Labels are plain English about the focal speaker so a positive bar can be
-  # read straight off the strip without consulting the docs.
+  # ---- 2. long format, one row per partner x component ---------------------
+  # labels are phrased about the focal speaker so a positive bar can be read
+  # straight off the strip without going back to the docs
   component_labels <- c(
     "init_ratio_log_z"    = "Starts conversations",
     "message_ratio_log_z" = "Sends more messages",
@@ -113,31 +113,32 @@ plot_dbi_components <- function(dbi_df,
                  values_to = "value") %>%
     filter(!is.na(value)) %>%
     mutate(
-      # Facets in DBI rank order, not alphabetical -- the ranking is the point.
+      # facets in rank order, not alphabetical - the ranking is the point
       other_recipient = factor(other_recipient, levels = dbi_ranked$other_recipient),
-      # Components in weight order. fct_rev because coord_flip-style horizontal
-      # bars build from the bottom up, and we want the heaviest at the top.
+      # components in weight order. fct_rev because horizontal bars build from
+      # the bottom up and the heaviest ones should be at the top.
       component = factor(component, levels = component_cols),
       component = fct_rev(fct_relabel(component, ~ component_labels[.x])),
-      # Sign drives the diverging fill. Ties at exactly 0 are vanishingly rare
-      # but would otherwise fall through to NA, so they resolve to `partner`.
+      # sign picks the fill color. exact ties at 0 are vanishingly rare but
+      # would fall through to NA, so they land on `partner`.
       leaning = if_else(value > 0, "speaker", "partner")
     )
 
-  # ---- 3. Color -------------------------------------------------------------
-  # Diverging, not categorical: the two colors are poles of one axis, so they
-  # are a warm/cool pair meeting at a neutral zero line. Warm marks the
-  # direction the index is actually about (the focal speaker leaning in).
+  # ---- 3. color ------------------------------------------------------------
+  # diverging rather than categorical - these are two ends of one axis, so a
+  # warm/cool pair meeting at the zero line. warm marks the direction the
+  # index is actually about.
   lean_colors <- c("speaker" = "#e34948", "partner" = "#2a78d6")
   lean_labels <- c("speaker" = paste(speaker_label, "lean in more"),
                    "partner" = paste(partner_label, "lean in more"))
 
-  # ---- 4. Build the plot ----------------------------------------------------
+  # ---- 4. plot -------------------------------------------------------------
   plot <- plot_data %>%
     ggplot(mapping = aes(x = value, y = component, fill = leaning)) +
     geom_col(width = 0.65) +
-    # The balance line is the reference the whole chart is read against, so it
-    # sits above the fill rather than under it.
+    # drawn after the bars so it sits on top - it's the reference the whole
+    # chart gets read against
+
     geom_vline(xintercept = 0, color = "#52514e", linewidth = 0.4) +
     facet_wrap(~ other_recipient, ncol = ncol) +
     scale_fill_manual(values = lean_colors,
@@ -146,8 +147,8 @@ plot_dbi_components <- function(dbi_df,
     scale_x_continuous(n.breaks = 5) +
     labs(
       subtitle = subtitle,
-      # \u2190 / \u2192 are left/right arrows, escaped so the source stays
-      # ASCII-only (a portability requirement for R packages).
+      # \u2190 / \u2192 are just left and right arrows - escaped because R
+      # package source has to be ASCII
       x = paste0("\u2190 ", partner_label, " lean in more",
                  "     |     ",
                  speaker_label, " lean in more \u2192"),
@@ -156,8 +157,8 @@ plot_dbi_components <- function(dbi_df,
     ) +
     theme_minimal(base_size = 11) +
     theme(
-      # Bars run horizontally, so only vertical gridlines help read magnitude;
-      # horizontal ones would just box in the bars.
+      # bars run horizontally, so vertical gridlines are the ones that help
+      # judge magnitude. horizontal ones would just box the bars in.
       panel.grid.minor = element_blank(),
       panel.grid.major.y = element_blank(),
       panel.grid.major.x = element_line(color = "#e1e0d9", linewidth = 0.3),

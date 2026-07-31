@@ -2,13 +2,12 @@
 "_PACKAGE"
 
 
-# ---- Package-level imports ---------------------------------------------------
-# This package is written in tidyverse idiom: nearly every function is a dplyr
-# pipeline, so importing those namespaces wholesale is both more readable and
-# more maintainable than tracking dozens of individual @importFrom tags.
-# Importing dplyr as a whole also resolves the classic filter()/lag() collisions
-# with stats in dplyr's favour, which is the behaviour every pipeline here
-# assumes. The narrower dependencies are imported by name.
+# ---- imports -----------------------------------------------------------------
+# nearly every function here is a dplyr pipeline, so the tidyverse namespaces
+# get imported whole rather than tracking dozens of individual @importFrom
+# tags. importing dplyr wholesale also settles the filter()/lag() collisions
+# with stats in dplyr's favour, which is what every pipeline below assumes.
+# the smaller dependencies are imported by name.
 
 #' @import dplyr
 #' @import tidyr
@@ -25,13 +24,13 @@
 NULL
 
 
-# ---- Non-standard evaluation ------------------------------------------------
-# dplyr pipelines refer to columns as bare symbols, which R CMD check cannot
-# distinguish from undefined global variables. Declaring them here silences the
-# "no visible binding for global variable" notes without obscuring real typos
-# elsewhere in the package.
+# ---- NSE column names --------------------------------------------------------
+# dplyr refers to columns as bare symbols and R CMD check can't tell those
+# apart from undefined variables. listing them here kills the "no visible
+# binding" notes. keeping the list explicit rather than blanket-suppressing
+# means a real typo still shows up.
 utils::globalVariables(c(
-  # magrittr's "." placeholder, used in a few pipelines
+  # magrittr's "." placeholder
   ".",
   # raw parse (process_txt_2)
   "raw_text", "chunk_id", "reply_text", "full_content", "attach_text",

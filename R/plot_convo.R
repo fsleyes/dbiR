@@ -37,11 +37,10 @@ plot_convo <- function(data, people, sentiment) {
 
   sent_label <- sentiment
 
-  # ---- 1. Restrict to the dyad and attach emotion norms --------------------
-  # Requiring BOTH speaker and recipient to be in `people` guarantees we only
-  # keep messages exchanged within this pair. The left_join attaches per-word
-  # emotion values; words absent from the norms simply get NA and are ignored
-  # by geom_smooth.
+  # ---- 1. narrow to the pair, attach norms ---------------------------------
+  # both speaker AND recipient have to be in `people`, otherwise messages
+  # either of them sent to someone else leak in. words missing from the norms
+  # table join to NA, which geom_smooth drops on its own.
   data_prep <- data %>%
     filter(!is.na(word_clean)) %>%
     filter(speaker %in% people & recipient %in% people) %>%
@@ -50,10 +49,10 @@ plot_convo <- function(data, people, sentiment) {
 
   
   
-  # ---- 2. Build the plot ----------------------------------------------------
-  # z-scoring puts every emotion dimension on a comparable scale so plots of
-  # different sentiments are visually comparable. geom_smooth(se = FALSE)
-  # shows the trend line only; colors are assigned in `people` order.
+  # ---- 2. plot -------------------------------------------------------------
+  # z-scoring puts the dimensions on a comparable scale, so two plots of
+  # different sentiments can be read against each other. colors go in
+  # `people` order.
   plot <- data_prep %>%
     mutate(sentiment_z = scale(.data[[sentiment]])) %>%
     ggplot(mapping = aes(x = datetime, y = sentiment_z, color = speaker)) +

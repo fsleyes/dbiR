@@ -82,18 +82,17 @@ dbi <- function(df,
                 weights = NA,
                 rt = "median") {
 
-  # ---- 1. Argument validation -------------------------------------------
-  # Fail fast with readable messages before doing any expensive work.
+  # ---- 1. validate args ----------------------------------------------------
+  # cheap checks first, before any of the expensive work below
   if (!rt %in% c("median", "mean")) {
 
     stop("reaction time must be specified as median (default) or mean")
   }
   
   
-  # ---- 2. Resolve weights ------------------------------------------------
-  # If the caller didn't supply a full set of 5 weights (including the
-  # weights = NA default, which has length 1), fall back to the empirical
-  # weights derived from the confirmatory factor analysis.
+  # ---- 2. weights ----------------------------------------------------------
+  # anything that isn't a full set of 5 (including the NA default, length 1)
+  # falls back to the CFA weights
   if(length(weights) != 5) { #set to default weights
 
     weights <- list(
@@ -105,8 +104,8 @@ dbi <- function(df,
     )
   } else if (length(weights) == 5) {
 
-    # Caller supplied custom weights: enforce the contract (list type,
-    # recognized names, sums to 1) so a typo can't silently skew the index.
+    # custom weights - check the type, names and sum so a typo can't quietly
+    # skew every score
     if (!is.list(weights)) {
       stop("weights must be a list")
     }
@@ -114,9 +113,9 @@ dbi <- function(df,
     expected <- c("word_ratio", "message_ratio", "end_ratio",
                   "init_ratio", "rt_ratio")
     
-    # setequal, not %in%: membership alone also accepts a list that repeats one
-    # name and omits another, which would slip through and then be renamed
-    # positionally below.
+    # setequal, not %in% - plain membership would accept a list that repeats
+    # one name and leaves another out, and that gets renamed positionally
+    # below without complaint
     if (!setequal(names(weights), expected)) {
       stop("weights names must match: ", paste(expected, collapse = ", "))
     }
@@ -128,19 +127,15 @@ dbi <- function(df,
   
   
   
-  # ---- 3. Map user-facing weight names onto internal column names --------
-  # Users specify weights with short names (init_ratio, rt_ratio, ...); the
-  # weighted sum below indexes columns by their transformed names
-  # (<ratio>_log_z). The rt choice decides whether rt_ratio points at the
-  # median- or mean-based column.
+  # ---- 3. rename weights to match the column names -------------------------
+  # callers use short names (init_ratio, rt_ratio, ...) but the weighted sum
+  # at the end looks up columns by their transformed names (<ratio>_log_z).
+  # rt decides whether rt_ratio points at the median or mean column.
   #
-  # The rename below is POSITIONAL, so the caller's list is reordered into the
-  # canonical order first. Without this, weights supplied in a different order
-  # -- e.g. list(word_ratio = , message_ratio = , end_ratio = , init_ratio = ,
-  # rt_ratio = ) -- are silently reassigned to the wrong components, and no
-  # validation can catch it because the names and the sum are all valid.
-  # Reordering by name here is what lets the two setNames blocks stay
-  # positional; keep this line directly above them.
+  # the setNames calls below are POSITIONAL, so reorder into canonical order
+  # first. skip this and a caller who lists their weights in a different order
+  # gets them silently attached to the wrong components - names and sum both
+  # validate fine, so nothing catches it. keep this line right where it is.
   weights <- weights[c("init_ratio", "rt_ratio", "message_ratio",
                        "end_ratio", "word_ratio")]
 
@@ -169,17 +164,17 @@ dbi <- function(df,
   
   
   
-  # ---- 4. Filter the corpus ----------------------------------------------
-  # Apply the date window and minimum-message cutoff once, up front, so all
-  # four component metrics are computed over the identical set of messages.
+  # ---- 4. filter the corpus ------------------------------------------------
+  # date window and message cutoff get applied once, here, so all four
+  # component functions see exactly the same messages
   sentences_cleaned <- prepare_sentences(data = df,
                                          date_min = date_min,
                                          date_max = date_max,
                                          message_min = message_min)
 
-  # ---- 5. Compute the five component ratios ------------------------------
-  # Each helper returns one row per conversation, keyed by
-  # (convo_num, other_recipient).
+  # ---- 5. the five components ----------------------------------------------
+  # each of these comes back one row per conversation, keyed on
+  # (convo_num, other_recipient)
   end_ratio <- calc_end_ratio(sentences = sentences_cleaned,
                               sec_threshold = sec_threshold,
                               speaker_str = speaker_str)
@@ -194,26 +189,26 @@ dbi <- function(df,
                                      speaker_str = speaker_str)
   
   
-  # ---- 6. Join components into one row per conversation -------------------
-  # full_join (not inner) so a conversation missing one metric still appears,
-  # with NA for that component rather than vanishing from the ranking.
+  # ---- 6. join them together -----------------------------------------------
+  # full_join rather than inner, so a conversation missing one metric still
+  # shows up with NA there instead of disappearing from the ranking
   join_list <- list(end_ratio, init_ratio, rt_ratio, word_message)
 
   joined_df <- reduce(join_list, full_join, by = c("other_recipient", "convo_num")) %>%
     select(convo_num, other_recipient, word_ratio, message_ratio, end_ratio,
            init_ratio, rt_ratio_mean, rt_ratio_median, speaker_messages, other_messages)
 
-  # ---- 6b. Flag conversations missing a component -------------------------
-  # A component is NA when only one person ever did the thing it measures, so
-  # there is no ratio to take. The usual cause is sec_threshold being long
-  # relative to how this pair actually texts: if no silence in the thread ever
-  # exceeds it, the whole conversation collapses into a single exchange with
-  # one initiator and one ender. It also happens over many exchanges when one
-  # person genuinely initiated (or ended) every single one.
+  # ---- 6b. flag anything that couldn't be scored ---------------------------
+  # a component comes back NA when only one person ever did the thing it
+  # measures. usually that's sec_threshold being longer than any silence in
+  # the thread, which collapses the whole conversation into one exchange with
+  # a single initiator and a single ender - it shows up on people you text
+  # constantly. it can also be genuine, if one person really did start (or
+  # end) every exchange over many of them.
   #
-  # These rows are kept rather than dropped — the components that did compute
-  # are still meaningful — but the composite is NA, so say so out loud instead
-  # of letting the conversation sink silently to the bottom of the ranking.
+  # keep the rows either way, the other components are still good. but say
+  # something, because otherwise the conversation just sinks to the bottom of
+  # the ranking with no explanation.
   rt_component <- if (rt == "median") "rt_ratio_median" else "rt_ratio_mean"
   component_cols <- c("init_ratio", rt_component, "message_ratio",
                       "end_ratio", "word_ratio")
@@ -246,18 +241,19 @@ dbi <- function(df,
             call. = FALSE)
   }
 
-  # ---- 7. Transform: log, then scale -------------------------------------
-  # Log makes the ratios symmetric: texting 2x as much (+log 2) and half as
-  # much (-log 2) sit equidistant from 0 instead of 2 vs 0.5.
+  # ---- 7. log, then scale --------------------------------------------------
+  # log makes the ratios symmetric - texting twice as much and half as much
+  # end up the same distance from 0, instead of 2 vs 0.5
   joined_df_log <- joined_df %>%
     mutate(across(c(word_ratio, message_ratio, end_ratio,
                     init_ratio, rt_ratio_mean, rt_ratio_median),
                   ~ log(.x),
                   .names = "{.col}_log"))
 
-  # Scale by SD but do NOT center: dividing by sd puts all components on a
-  # comparable spread, while keeping 0 anchored at "perfectly balanced"
-  # (centering would redefine 0 as "average for THIS corpus").
+  # divide by sd but do NOT center. dividing puts the components on a
+  # comparable spread; centering would move 0 from "actually balanced" to
+  # "average for whoever happens to be in this corpus", which isn't what we
+  # want it to mean
   joined_df_z <- joined_df_log %>%
     mutate(across(c(word_ratio_log, message_ratio_log, end_ratio_log, 
                     init_ratio_log, rt_ratio_mean_log, rt_ratio_median_log),
@@ -265,9 +261,9 @@ dbi <- function(df,
                   .names = "{.col}_z"))
   
   
-  # ---- 8. Weighted sum -> final index -------------------------------------
-  # For each row, multiply each *_log_z column by its weight and sum. Sorted
-  # descending so the top of the table is the most asymmetric conversation.
+  # ---- 8. weighted sum -----------------------------------------------------
+  # multiply each *_log_z column by its weight and add them up. sorted
+  # descending, so the most lopsided conversation is at the top.
   final_df <- joined_df_z %>%
     mutate(dbi = rowSums(across(names(weights),
                                 ~ .x * weights[[cur_column()]]))) %>%

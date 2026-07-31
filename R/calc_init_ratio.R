@@ -22,14 +22,14 @@ calc_init_ratio <- function(sentences,
 
 
 
-  # ---- 1. Segment messages into turns and exchanges -----------------------
+  # ---- 1. turns and exchanges ---------------------------------------------
   data_prep <- segment_turns(sentences, sec_threshold = sec_threshold)
 
 
-  # ---- 2. Count initiations per person -------------------------------------
-  # The initiator of an exchange is whoever sent its first turn. n() == 2
-  # keeps only conversations where BOTH people initiated at least once — a
-  # fully one-sided conversation has no defined ratio and is dropped.
+  # ---- 2. count initiations ------------------------------------------------
+  # whoever sent the first turn of an exchange started it. n() == 2 drops
+  # conversations where only one person ever went first, since there's no
+  # ratio to take.
   data_calc <- data_prep %>%
     group_by(convo_num, exchange_id) %>%
     summarize(speaker_init = first(speaker),
@@ -40,9 +40,9 @@ calc_init_ratio <- function(sentences,
     group_by(convo_num) %>%
     filter(n() == 2)
   
-  # ---- 3. Compute the ratio -------------------------------------------------
-  # init_ratio = speaker initiations / other's initiations; > 1 means the
-  # focal speaker reaches out first more often.
+  # ---- 3. the ratio --------------------------------------------------------
+  # speaker's initiations over theirs, so > 1 means the focal speaker is the
+  # one reaching out first
   data_ratio <- data_calc %>%
     group_by(convo_num) %>%
     summarize(init_speaker = num_init[speaker_init == speaker_str],

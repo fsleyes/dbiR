@@ -15,12 +15,11 @@
 word_message_ratio <- function(sentences,
                             speaker_str) {
 
-  # ---- 1. Count volume per person ------------------------------------------
-  # Words are counted directly from the raw text column ("\\S+" = runs of
-  # non-whitespace), deliberately NOT from stopword-cleaned words — volume
-  # asymmetry should reflect everything typed.
+  # ---- 1. count volume per person ------------------------------------------
+  # counted off the raw text column, not cleaned words - "\\S+" is just runs
+  # of non-whitespace. this is deliberate: volume asymmetry should count
+  # everything someone typed, stopwords included.
   data_ratio <- sentences %>%
-    # Compute word count per speaker from the filtered, cleaned messages
     group_by(convo_num, speaker) %>%
     summarize(
       word_n        = sum(str_count(text, "\\S+")),
@@ -30,9 +29,9 @@ word_message_ratio <- function(sentences,
     ) %>%
     filter(!is.na(recipient)) %>%
     group_by(convo_num) %>%
-    # ---- 2. Pivot to one row per conversation ------------------------------
-    # n() == 2 requires both participants to have sent at least one message;
-    # ratios are focal / other, so > 1 = focal speaker writes more.
+    # ---- 2. one row per conversation ---------------------------------------
+    # n() == 2 needs both people to have sent something. ratios are focal over
+    # other, so > 1 means the focal speaker writes more.
     filter(n() == 2) %>%
     summarize(
       speaker_words   = word_n[speaker == speaker_str],

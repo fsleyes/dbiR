@@ -24,18 +24,17 @@ calc_end_ratio <- function(sentences,
 
 
 
-  # ---- 1. Segment messages into turns and exchanges -----------------------
-  # The lag() inside segment_turns() is what this function depends on: it keeps
-  # the final unanswered turn attached to the exchange it closed, so the last
-  # row of each exchange identifies who let the conversation drop.
+  # ---- 1. turns and exchanges ---------------------------------------------
+  # this one leans on the lag() inside segment_turns(): it keeps the final
+  # unanswered turn attached to the exchange it closed, so the last row of
+  # each exchange tells us who let it drop
   data_prep <- segment_turns(sentences, sec_threshold = sec_threshold)
 
 
-  # ---- 2. Identify who ended each exchange ---------------------------------
-  # last(recipient) is the person who RECEIVED the exchange's final turn and
-  # chose not to reply — i.e. the one who ended the exchange by going silent.
-  # n() == 2 keeps only conversations where both people ended at least one
-  # exchange (otherwise no ratio is defined).
+  # ---- 2. who ended each exchange ------------------------------------------
+  # last(recipient) is whoever got the final turn and didn't reply - they're
+  # the one who ended it by going quiet. n() == 2 drops conversations where
+  # only one person ever did that, since there's no ratio to take.
   data_calc <- data_prep %>%
     group_by(convo_num, exchange_id) %>%
     summarize(speaker_end = last(recipient),
@@ -46,18 +45,17 @@ calc_end_ratio <- function(sentences,
     group_by(convo_num) %>%
     filter(n() == 2)
   
-  # ---- 3. Compute the ratio -------------------------------------------------
-  # speaker_end names the person who ENDED each exchange by going silent, so
-  # end_speaker counts exchanges the focal speaker ended, and end_other counts
-  # exchanges the other person ended (= times the focal speaker was left on
-  # read). Ratio is other/speaker: higher = the other person ends more
-  # conversations = focal speaker gets left on read more.
+  # ---- 3. the ratio --------------------------------------------------------
+  # speaker_end is the person who ended the exchange, so end_speaker counts
+  # the ones the focal speaker let die and end_other counts the ones the other
+  # person did. other/speaker, so higher = they drop conversations on you more
+  # often than you drop them.
   data_ratio <- data_calc %>%
     group_by(convo_num) %>%
-    summarize(end_speaker = num_end[speaker_end == speaker_str], #exchanges ENDED BY the focal speaker (focal went silent)
-              end_other = num_end[speaker_end != speaker_str], #exchanges ENDED BY the other person (focal was left on read)
+    summarize(end_speaker = num_end[speaker_end == speaker_str], #focal speaker went quiet
+              end_other = num_end[speaker_end != speaker_str], #they went quiet (focal left on read)
 
-              end_ratio = end_other / end_speaker, #higher means the other person ended more exchanges (focal got left on read more)
+              end_ratio = end_other / end_speaker, #higher = focal gets left on read more
               other_recipient = first(speaker_end[speaker_end != speaker_str]),
               .groups = "drop_last") %>%
     arrange(desc(end_ratio))

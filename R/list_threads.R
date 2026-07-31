@@ -19,9 +19,9 @@
 list_threads <- function(directory) {
 
   list.files(directory, pattern = "\\.txt$", full.names = TRUE) %>%
-    # group chats are named with multiple comma-separated handles
-    # (e.g. "+1..., +1....txt" or "..., and 7 others.txt");
-    # a 1-on-1 chat is a single handle with no comma
+    # group exports are named with several comma-separated handles
+    # ("+1..., +1....txt", or "..., and 7 others.txt" once there are enough of
+    # them). a one-on-one is a single handle, no comma.
     str_subset(",", negate = TRUE) %>%
     str_subset("\\+")
 }

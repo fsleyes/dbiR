@@ -28,12 +28,12 @@ plot_dyadic_emotion <- function(data, people, sentiment) {
 
 
 
-  # Build one ggplot per sentiment...
+  # one plot per sentiment
   plots <- sentiment %>%
     map(~ plot_convo(data = data, people = people, sentiment = .x))
 
-  # ...then print explicitly: inside loops/functions ggplots are not
-  # auto-printed, so without this the plots would silently not appear.
+  # print() is needed here - ggplots don't auto-print from inside a function
+  # or loop, so without it nothing shows up
   for (i in seq_along(plots)) {
 
     print(plots[[i]])

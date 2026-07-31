@@ -15,10 +15,10 @@
 #' @keywords internal
 list_to_df <- function(msg_list) {
 
-  # An empty list means every thread was filtered out upstream — wrong
-  # directory, group chats only, or no contacts with saved display names.
-  # Without this guard the filters below fail on a zero-column data frame with
-  # "object 'speaker' not found", which says nothing about the real cause.
+  # empty list means everything got filtered out upstream - wrong directory,
+  # all group chats, or no saved contact names. without this the filters below
+  # die on a zero-column frame with "object 'speaker' not found", which tells
+  # you nothing about what actually went wrong.
   if (length(msg_list) == 0) {
     warning("No valid dyadic conversations were found. Threads are dropped ",
             "when the file is a group chat, has only one speaker, or names a ",

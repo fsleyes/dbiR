@@ -39,9 +39,9 @@
 segment_turns <- function(sentences, sec_threshold = 172800) {
 
   sentences %>%
-    # ---- 1. Mark turn boundaries -------------------------------------------
-    # A turn breaks on a change of sender or on a silence longer than the
-    # threshold; cumsum over those breakpoints numbers the turns.
+    # ---- 1. find turn boundaries -------------------------------------------
+    # a turn breaks when the sender changes, or after a silence longer than
+    # the threshold. cumsum over the breakpoints numbers them.
     group_by(convo_num) %>%
     mutate(prev_gap = as.numeric(difftime(datetime,
                                           lag(datetime, default = first(datetime)),
@@ -50,9 +50,9 @@ segment_turns <- function(sentences, sec_threshold = 172800) {
              prev_gap > sec_threshold,
            turn_id = cumsum(new_turn)) %>%
 
-    # ---- 2. Collapse each turn to one row ----------------------------------
-    # All messages in a turn share a sender, so first() is safe for the
-    # participant columns; the timestamps bracket the turn.
+    # ---- 2. one row per turn -----------------------------------------------
+    # every message in a turn has the same sender, so first() is fine for the
+    # participant columns. the two timestamps bracket the turn.
     group_by(convo_num, turn_id) %>%
     summarize(speaker = first(speaker, na_rm = TRUE),
               recipient = first(recipient, na_rm = TRUE),
@@ -62,11 +62,11 @@ segment_turns <- function(sentences, sec_threshold = 172800) {
               .groups = "drop_last") %>%
     filter(!is.na(turn_start)) %>%
 
-    # ---- 3. Chain turns into exchanges -------------------------------------
-    # response_time measures how long the OTHER party took to answer this turn.
-    # Anything longer than the threshold is a lapse rather than a reply: it
-    # opens a new exchange, and is blanked out of valid_response_time so it
-    # cannot inflate response-time averages.
+    # ---- 3. chain turns into exchanges -------------------------------------
+    # response_time is how long the OTHER person took to answer this turn.
+    # anything over the threshold isn't a reply, it's the conversation dying:
+    # it starts a new exchange and gets blanked out of valid_response_time so
+    # it can't drag the averages up.
     group_by(convo_num) %>%
     mutate(response_timestamp = lead(turn_start),
            response_time = difftime(response_timestamp,
@@ -79,7 +79,6 @@ segment_turns <- function(sentences, sec_threshold = 172800) {
                                         NA,
                                         response_time)) %>%
 
-    # Callers regroup for their own summaries, so hand back a clean object
-    # rather than leaking this function's grouping state.
+    # every caller regroups anyway, so don't leak grouping state out of here
     ungroup()
 }

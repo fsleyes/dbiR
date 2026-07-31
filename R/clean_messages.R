@@ -75,24 +75,20 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
   
   
   
-  # ---- 1. Normalize encoding + case ---------------------------------------
-  # id_row_orig tags every row BEFORE the explosion below, so each word can be
-  # traced back to (and regrouped into) its original message. The tryCatch
-  # falls back to a plain re-encode if strict UTF-8 validation errors on a
-  # pathological string.
-  # Create working copy and perform initial split, standardizes text encoding so all characters are UTF8, adds an id variable
-  # transform all text to lower
+  # ---- 1. encoding + case --------------------------------------------------
+  # id_row_orig has to be assigned here, before the split below, or there's no
+  # way to get words back to the message they came from. tryCatch because
+  # strict UTF-8 validation occasionally chokes on a weird string.
   dat_prep <- dat %>% dplyr::mutate(id_row_orig = factor(seq_len(nrow(dat))),
                                     text_initialsplit = tryCatch(stringi::stri_enc_toutf8(as.character(.[[wordcol]]),
                                                                                           is_unknown_8bit = TRUE,
                                                                                           validate = TRUE), error = function(e) stringi::stri_encode(as.character(.[[wordcol]]), to = "UTF-8")
                                     ) %>% tolower())
   
-  # ---- 2. Standardize apostrophes -----------------------------------------
-  # Map every unicode apostrophe/quote variant (curly quotes, primes, accents)
-  # to the plain ASCII ' so contractions match the replacement table and
-  # stopword list exactly.
-  #Standardize apostrophes in original text
+  # ---- 2. apostrophes ------------------------------------------------------
+  # iOS uses curly quotes, keyboards use straight ones, and the replacement
+  # table below is keyed on one of them. Normalize to ASCII ' so contractions
+  # actually match.
   dat_prep <- dat_prep %>% dplyr::mutate(text_initialsplit = ifelse(
     is.na(text_initialsplit), NA_character_, stringi::stri_replace_all_regex(
       text_initialsplit,
@@ -102,11 +98,9 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
   )
   )
   
-  # ---- 3. Explode messages into words -------------------------------------
-  # One row per whitespace-delimited token; contractions stay intact because
-  # apostrophes are not separators. Empty tokens become NA rather than being
-  # dropped, so message rows are preserved even when nothing survives.
-  # Perform initial split into words (retains contractions)
+  # ---- 3. split into words -------------------------------------------------
+  # whitespace only, so contractions stay in one piece. empty tokens become NA
+  # rather than getting dropped, which keeps the row and its id_row_orig.
   dat_prep <- dat_prep %>% tidyr::separate_rows(text_initialsplit, sep = "[[:space:]]+") %>%
     dplyr::mutate(
       text_initialsplit = ifelse(
@@ -118,12 +112,10 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
     # Remove original column
     dplyr::select(-all_of(wordcol))
   
-  # ---- 4. Strip punctuation -----------------------------------------------
-  # Non-letters (except apostrophes) become SPACES, not deletions, so embedded
-  # punctuation splits words apart ("don't-stop" -> "don't stop") instead of
-  # fusing them ("don'tstop"). The spaces are then split on in step 6.
-  # text_initialsplit is kept alongside word_clean for debugging/traceability.
-  # Initialize cleaning column with actual cleaned text
+  # ---- 4. strip punctuation ------------------------------------------------
+  # punctuation becomes a SPACE, not nothing. deleting it fuses words together
+  # ("don't-stop" -> "don'tstop"); turning it into a space lets step 6 split
+  # them properly. text_initialsplit sticks around for debugging.
   dat_prep <- dat_prep %>%
     dplyr::mutate(
       word_clean = text_initialsplit,
@@ -142,10 +134,10 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
     )
   
   
-  # ---- 5. Apply the replacement dictionary --------------------------------
-  # replacements_25 maps slang/abbreviations/contractions to expansions
-  # ("gonna" -> "going to"). Its own 'word' column gets the same apostrophe
-  # normalization as the data so join keys match exactly.
+  # ---- 5. replacements -----------------------------------------------------
+  # expands slang and contractions ("gonna" -> "going to"). the table's own
+  # word column gets the same apostrophe treatment as the data, otherwise the
+  # join keys don't line up.
   replacements_25 <- replacements_25 %>%
     dplyr::mutate(word = stringi::stri_replace_all_regex(word,
                                                          "[\u2018\u2019\u02BC\u201B\uFF07\u0092\u0091\u0060\u00B4\u2032\u2035]",
@@ -153,9 +145,8 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
                                                          vectorize_all = FALSE
     ))
   
-  # coalesce keeps the original word wherever no replacement exists (the join
-  # yields NA); separate_rows re-splits because a replacement can expand one
-  # token into several words ("gonna" -> "going to").
+  # coalesce keeps the original when there's no replacement (join gives NA).
+  # separate_rows because one token can expand into several words.
   dat_prep <- dat_prep %>%
     left_join(replacements_25, by = c("word_clean" = "word")) %>%
     mutate(word_clean = coalesce(replacement, word_clean)) %>%
@@ -164,11 +155,9 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
 
 
 
-  # ---- 6. Final split ------------------------------------------------------
-  # Split any remaining multi-word strings (from step 4's punctuation->space
-  # substitution) and blank empty tokens to NA. convert is left off: type
-  # conversion would coerce tokens like "T", "F" and "NA" away from character
-  # and corrupt the column.
+  # ---- 6. final split ------------------------------------------------------
+  # picks up the spaces step 4 introduced. no convert = TRUE here on purpose:
+  # it would turn tokens like "T", "F" and "NA" into logicals.
   dat_prep <- dat_prep %>%
     tidyr::separate_rows(word_clean, sep = "[[:space:]]+") %>%
     dplyr::mutate(
@@ -182,9 +171,9 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
   
   
   
-  # ---- 7. Optional lemmatization ------------------------------------------
-  # Build the lemma dictionary from UNIQUE words then join it back — far
-  # cheaper than lemmatizing every row when words repeat thousands of times.
+  # ---- 7. lemmatize (optional) ---------------------------------------------
+  # build the dictionary from unique words and join it back, rather than
+  # lemmatizing row by row - words repeat thousands of times in a real corpus
   if (lemmatize) {
     lemma_dict <- tibble(word_clean = unique(dat_prep$word_clean)) %>%
     filter(!is.na(word_clean) & word_clean != "") %>%
@@ -199,10 +188,9 @@ clean_messages <- function(dat, wordcol, omit_stops = FALSE, lemmatize = FALSE) 
   
   
   
-  # ---- 8. Optional stopword removal ---------------------------------------
-  # Stopwords are NA'd, not filtered, so the row (and its id_row_orig link to
-  # the original message) survives — important for message-level regrouping.
-  # Stopword removal if requested (now keeps NAs)
+  # ---- 8. stopwords (optional) ---------------------------------------------
+  # NA'd rather than filtered out, so the row and its id_row_orig link back to
+  # the original message survive
   if (omit_stops) {
     stopwords <- tolower(Temple_stops25$word)
     dat_prep <- dat_prep %>%

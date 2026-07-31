@@ -28,17 +28,17 @@ calc_rt_ratio <- function(sentences,
 
 
 
-  # ---- 1. Segment messages into turns and exchanges -----------------------
-  # valid_response_time (response_time with over-threshold gaps blanked out) is
-  # the column this function is built on.
+  # ---- 1. turns and exchanges ---------------------------------------------
+  # valid_response_time is the column that matters here - response_time with
+  # the over-threshold gaps already blanked out
   data_prep <- segment_turns(sentences, sec_threshold = sec_threshold)
 
 
-  # ---- 2. Summarize response times per responder ---------------------------
-  # Grouping by recipient: the response_time on a turn measures how fast the
-  # RECIPIENT of that turn replied, so recipient == speaker_str rows hold the
-  # focal speaker's own response times. NaN (no valid responses at all)
-  # becomes NA and those rows are dropped.
+  # ---- 2. response times per person ----------------------------------------
+  # grouping by recipient, not speaker: the response_time attached to a turn
+  # measures how fast whoever RECEIVED it wrote back. so the rows where
+  # recipient == speaker_str are the focal speaker's own reply times. NaN
+  # means they never replied within the threshold at all.
   data_sum <- data_prep %>%
     group_by(convo_num, recipient) %>%
     summarize(mean_rt = mean(valid_response_time, na.rm = TRUE),
@@ -50,11 +50,9 @@ calc_rt_ratio <- function(sentences,
     filter(!is.na(mean_rt))
 
 
-  # ---- 3. Pivot to one row per conversation and compute ratios ------------
-  # n() == 2 requires BOTH parties to have at least one valid response time;
-  # conversations where only one side ever responded are excluded (no ratio
-  # is defined). rt_ratio = other / speaker, so > 1 means the focal speaker
-  # replies faster than the other person.
+  # ---- 3. one row per conversation -----------------------------------------
+  # n() == 2 needs both people to have at least one real response time.
+  # other/speaker, so > 1 means the focal speaker is the faster replier.
   data_rt_ratio <- data_sum %>%
     group_by(convo_num) %>%
     filter(!is.na(recipient)) %>%
@@ -73,10 +71,10 @@ calc_rt_ratio <- function(sentences,
     relocate(convo_num, other_recipient, rt_ratio_mean, rt_ratio_median)
 
   
-  # ---- 4. Sort by the requested summary statistic -------------------------
-  # NOTE: no else fallback — an unrecognized arrange_by value would leave
-  # final_data undefined. dbi() validates rt upstream, so only "median"/"mean"
-  # reach here in the normal pipeline.
+  # ---- 4. sort -------------------------------------------------------------
+  # no else branch: anything other than median/mean leaves final_data
+  # undefined. dbi() validates rt before calling, so nothing else gets here
+  # through the normal path.
   if (arrange_by == "median") {
     final_data <- data_rt_ratio %>%
       arrange(desc(rt_ratio_median))

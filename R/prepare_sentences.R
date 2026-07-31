@@ -21,10 +21,10 @@
 #' @keywords internal
 prepare_sentences <- function(data, date_min, date_max, message_min) {
 
-  # ---- 1. Optional date window ---------------------------------------------
-  # parse_date_time tries multiple order patterns so callers can pass dates
-  # in several common formats; comparisons are strict (> and <), so messages
-  # exactly ON a bound are excluded.
+  # ---- 1. date window (optional) -------------------------------------------
+  # parse_date_time takes several order patterns so callers can write the date
+  # however they like. comparisons are strict, so a message landing exactly on
+  # a bound is excluded.
   if (!is.na(date_min) | !is.na(date_max)) {
     orders <- c("Ymd HMS", "mdY HMS", "dmY HMS", "Ymd", "mdY")
 
@@ -40,9 +40,9 @@ prepare_sentences <- function(data, date_min, date_max, message_min) {
   }
   
   
-  # ---- 2. Conversation-size filter ------------------------------------------
-  # num_messages is computed AFTER the date filter, so the cutoff applies to
-  # messages within the analysis window, not the all-time thread size.
+  # ---- 2. size filter ------------------------------------------------------
+  # counted after the date filter on purpose, so message_min applies to the
+  # window being analysed rather than the all-time size of the thread
   data_clean <- data %>%
     group_by(convo_num) %>%
     mutate(num_messages = n())

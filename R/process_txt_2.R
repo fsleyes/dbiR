@@ -25,115 +25,101 @@
 #' @keywords internal
 process_txt_2 <- function(file, speaker_name, remove_attach = TRUE) {
 
-  # A real message always starts with a header line that is ONLY a timestamp
-  # (optionally followed by a "(Read by ...)" receipt), e.g.
+  # messages are separated by timestamp header lines like
   #   "Jan 26, 2024 10:38:36 AM (Read by you after 22 seconds)"
-  # We use this to mark message boundaries. Using blank lines as boundaries
-  # (the previous approach) breaks two ways:
-  #   1. multi-paragraph messages contain internal blank lines, so they were
-  #      split apart and everything after the first paragraph was dropped, and
-  #   2. the end-anchor ($) prevents a message whose *text* happens to begin
-  #      with a timestamp from being mistaken for a new message.
+  # used to be blank-line separated, but that breaks on multi-paragraph
+  # messages (they have blank lines inside them) and on messages whose text
+  # happens to start with something that looks like a timestamp
   header_re <- "^[A-Z][a-z]{2} \\d{1,2}, \\d{4} +\\d{1,2}:\\d{2}:\\d{2} [AP]M( \\(Read by[^)]*\\))?$"
 
-  # Timestamps are parsed with %b (month abbreviation) and %p (AM/PM), both of
-  # which are locale-dependent. imessage-exporter always writes English, so on
-  # a machine with a non-English LC_TIME every timestamp would silently parse
-  # to NA — and NA datetimes are then dropped by date filtering, or corrupt the
-  # cumulative exchange numbering downstream. Parsing under the C locale makes
-  # the result independent of the user's system settings.
+  # %b/%p in the format string below are locale-dependent, so parsing under
+  # whatever locale the user happens to have would silently turn every
+  # timestamp into NA on a non-English machine. Force C for the parse and put
+  # it back after.
   old_lc_time <- Sys.getlocale("LC_TIME")
   Sys.setlocale("LC_TIME", "C")
   on.exit(Sys.setlocale("LC_TIME", old_lc_time), add = TRUE)
 
-  text_raw <- readLines(file)                        # read every line of the export as a character vector
-  text_raw_df <- data.frame(raw_text = text_raw)    # wrap in a df so we can use dplyr verbs
+  text_raw <- readLines(file)
+  text_raw_df <- data.frame(raw_text = text_raw)
   text_df <- text_raw_df %>%
     mutate(
-      # every time we hit a timestamp header, increment the chunk counter — all
-      # lines that follow belong to that message until the next header fires
+      # bump the chunk counter on every header line; everything after it
+      # belongs to that message until the next header shows up
       chunk_id = cumsum(grepl(pattern = header_re, x = raw_text)),
       reply_text = case_when(
-        # iMessage quoted-reply previews are indented with 4 spaces; drop them
-        # so they don't get concatenated into the sender's actual message body
+        # quoted-reply previews are indented 4 spaces, drop them so they
+        # don't get glued onto the real message body
         grepl(pattern = "^    ", x = raw_text) == TRUE ~ 0,
         TRUE ~ 1
       )
     ) %>%
     filter(
-      raw_text != "" &        # drop blank lines (whitespace-only separators)
-      reply_text == 1         # drop indented quoted-reply lines
+      raw_text != "" &
+      reply_text == 1
     ) %>%
     group_by(chunk_id) %>%
     summarize(
-      # collapse all lines belonging to a single message into one string,
-      # preserving newlines so multi-paragraph messages stay intact
+      # collapse everything in one chunk into a single string, keep the
+      # newlines so multi-paragraph messages don't get flattened
       full_content = paste(raw_text, collapse = "\n"),
       .groups = "drop"
     ) %>%
-    # tapback acknowledgements ("reacted with a heart") produce a standalone
-    # chunk with only this string — remove them before splitting
+    # tapback chunks are just this one line by itself
     filter(full_content != "This message responded to an earlier message.")
 
   text_df_split <- text_df %>%
-    # each chunk is now: timestamp \n sender \n message body (possibly multi-line)
-    # split on the first two newlines only; extra = "merge" keeps the body intact
+    # chunk is timestamp \n sender \n body (maybe multi-line) - split on the
+    # first two newlines and keep the rest of the body together
     separate(full_content,
              into = c("time", "speaker", "text"),
              sep = "\n",
              extra = "merge",
-             fill = "right") %>%   # chunks with no message body -> text = NA (dropped below)
+             fill = "right") %>%
     mutate(
-      # strip residual "responded to earlier message" strings that survived inside body text
+      # sometimes this string survives inside the body itself, strip it
       text = gsub(pattern = "This message responded to an earlier message.",
                      replacement = "",
                      x = text),
-      # remove tapback lines that appear inline (e.g. "Tapbacks: ♥ 2") — they
-      # are metadata, not conversation content
+      # inline tapback markers, e.g. "Tapbacks: ♥ 2"
       text = str_remove(pattern = "Tapbacks:\\D*",
                            string = text),
-      # strip the "(Read by you after X seconds)" receipt from the timestamp
-      # so strptime can parse it cleanly later
+      # "(Read by you after X seconds)" needs to go before we can parse time
       time = str_remove(pattern = "\\s*\\(Read by.*?\\)",
                            string = time)
     ) %>%
-    filter(!is.na(text)) %>%   # drop header-only chunks that had no body (fill = "right" left NA)
+    filter(!is.na(text)) %>%   # header with no body underneath it
     mutate(
       attach_text = case_when(
-        # attachment lines are file paths into ~/Library/Messages/Attachments/;
-        # flag them so we can optionally strip them below
+        # attachments show up as file paths into the Messages attachments dir
         grepl(pattern = "/Library/Messages/Attachments/", x = text, fixed = TRUE) == TRUE ~ 0,
         TRUE ~ 1
       )
     ) %>%
-    { if(remove_attach == TRUE) filter(., attach_text == 1) else . } %>%   # conditionally drop attachment lines
+    { if(remove_attach == TRUE) filter(., attach_text == 1) else . } %>%
     #filter(attach_text == 1) %>%
     mutate(
-      speaker = recode(speaker, Me = speaker_name),                              # replace the literal "Me" with the caller-supplied name
-      # as.POSIXct, not strptime: strptime returns a list-based POSIXlt, which
-      # is fragile through summarize()/unique() and across parallel workers.
-      # The timestamps are local wall-clock time as displayed by the exporter,
-      # so they are interpreted in the system timezone, stated explicitly
-      # rather than left implicit.
+      speaker = recode(speaker, Me = speaker_name),
+      # POSIXct instead of strptime's POSIXlt - the list-based one doesn't
+      # play well with summarize/unique or across parallel workers
       datetime = as.POSIXct(time,
                             format = "%b %d, %Y %I:%M:%S %p",
                             tz = Sys.timezone())
     ) %>%
     select(speaker, text, datetime)
 
-  # grab the two participants; index 1:2 guards against group chats where
-  # unique() could return more than two names
+  # 1:2 here is what actually guards against group chats - unique() on a
+  # group thread returns more than 2 names
   speakers <- unique(text_df_split$speaker)[1:2]
 
-  # bail out if the conversation has fewer than two identifiable speakers
-  # (e.g. an empty export or a one-sided log)
+  # fewer than two real speakers means this isn't a usable conversation
   if (length(speakers) == 1 | length(speakers) == 0 |
       is.na(speakers[[1]]) | is.na(speakers[[2]])) {
     return(tibble())
   }
 
-  # phone numbers appear when a contact has no saved display name; skip these
-  # because downstream code expects real names, not "+1XXXXXXXXXX" strings
+  # no saved contact name means the export just has a phone number, and
+  # everything downstream expects a real name
   if (str_detect(string = speakers[1], pattern = "\\+") |
       str_detect(string = speakers[2], pattern = "\\+")) {
 
@@ -142,7 +128,7 @@ process_txt_2 <- function(file, speaker_name, remove_attach = TRUE) {
 
 
   text_df_names <- text_df_split %>%
-    # derive recipient from speaker — each row gets the *other* participant's name
+    # recipient is just whichever of the two isn't the speaker on this row
     mutate(recipient = case_when(
       speaker == speakers[1] ~ speakers[2],
       speaker == speakers[2] ~ speakers[1],
