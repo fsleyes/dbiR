@@ -110,6 +110,52 @@ test_that("custom weights are accepted and change the score", {
 })
 
 
+test_that("a conversation with no long silence warns but keeps its row", {
+  # With a threshold longer than the whole thread, nothing splits it: the
+  # conversation is a single exchange with one initiator and one ender, so
+  # init_ratio and end_ratio have no second party and come out NA. This is the
+  # case that silently sank a real conversation to the bottom of the ranking.
+  df <- fixture_messages()
+
+  expect_warning(
+    scored <- dbi(df, speaker_str = "Shawn Wang",
+                  sec_threshold = 60 * 60 * 24 * 365,   # one year
+                  message_min = NA, date_min = NA, date_max = NA),
+    "could not be scored on every component"
+  )
+
+  # Kept, not dropped.
+  expect_equal(nrow(scored), 4)
+  expect_true(any(is.na(scored$dbi)))
+
+  # The components that do not depend on exchange structure still computed.
+  expect_false(any(is.na(scored$word_ratio)))
+  expect_false(any(is.na(scored$message_ratio)))
+})
+
+
+test_that("the incomplete-score warning names the conversation and the lever", {
+  df <- fixture_messages()
+
+  w <- tryCatch(
+    dbi(df, speaker_str = "Shawn Wang", sec_threshold = 60 * 60 * 24 * 365,
+        message_min = NA, date_min = NA, date_max = NA),
+    warning = function(w) conditionMessage(w)
+  )
+
+  expect_match(w, "Alice Test|Bob Chill|Carol Even|Dana Edgecase")
+  expect_match(w, "missing:")
+  expect_match(w, "sec_threshold")
+})
+
+
+test_that("no warning when every conversation scores completely", {
+  # The fixtures use multi-day gaps, so the default threshold splits them all
+  # into several exchanges and every component is defined.
+  expect_no_warning(fixture_dbi())
+})
+
+
 test_that("invalid arguments are rejected with an explanatory message", {
   df <- fixture_messages()
   call_dbi <- function(...) {

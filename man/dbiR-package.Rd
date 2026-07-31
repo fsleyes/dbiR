@@ -8,6 +8,14 @@
 \description{
 Tools for reading exported iMessage conversation threads and scoring dyadic conversations on behavioral asymmetry. Parses raw 'imessage-exporter' text files into tidy message-level data, cleans and tokenizes message text against lexical and emotion norms, and computes the Down Bad Index (DBI): a weighted composite of five per-conversation ratios capturing who initiates exchanges, who replies faster, who is left on read, and who sends more words and messages.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/fsleyes/dbiR}
+  \item Report bugs at \url{https://github.com/fsleyes/dbiR/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Shawn Wang \email{shawn.wang.1667@gmail.com}
 

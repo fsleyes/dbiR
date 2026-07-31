@@ -34,9 +34,19 @@
 #' @param rt Which response-time summary feeds the index: "median" (default,
 #'   robust to outliers) or "mean".
 #'
+#' A conversation can fail to produce one of the five components, in which case
+#' its \code{dbi} is NA and a warning names it. This happens when only one
+#' person ever initiated (or ended) an exchange, so there is no ratio to take.
+#' The usual cause is \code{sec_threshold} being long relative to how that pair
+#' texts: if no silence in the thread ever exceeds it, the entire conversation
+#' collapses into one exchange with a single initiator and a single ender.
+#' Shortening \code{sec_threshold} generally resolves it. Such rows are kept
+#' rather than dropped — their other components are still valid.
+#'
 #' @return A data frame with one row per conversation, ranked by descending
 #'   \code{dbi}, containing the raw ratios, their log/z transforms, and the
-#'   final \code{dbi} score.
+#'   final \code{dbi} score. Conversations missing a component keep their row
+#'   with \code{dbi = NA}; see the note above.
 #' @seealso \code{\link{read_imessages}} to build the input data frame,
 #'   \code{\link{plot_dbi_components}} to see why each partner scored as it did.
 #' @examples
@@ -190,9 +200,52 @@ dbi <- function(df,
   join_list <- list(end_ratio, init_ratio, rt_ratio, word_message)
 
   joined_df <- reduce(join_list, full_join, by = c("other_recipient", "convo_num")) %>%
-    select(convo_num, other_recipient, word_ratio, message_ratio, end_ratio, 
+    select(convo_num, other_recipient, word_ratio, message_ratio, end_ratio,
            init_ratio, rt_ratio_mean, rt_ratio_median, speaker_messages, other_messages)
-  
+
+  # ---- 6b. Flag conversations missing a component -------------------------
+  # A component is NA when only one person ever did the thing it measures, so
+  # there is no ratio to take. The usual cause is sec_threshold being long
+  # relative to how this pair actually texts: if no silence in the thread ever
+  # exceeds it, the whole conversation collapses into a single exchange with
+  # one initiator and one ender. It also happens over many exchanges when one
+  # person genuinely initiated (or ended) every single one.
+  #
+  # These rows are kept rather than dropped — the components that did compute
+  # are still meaningful — but the composite is NA, so say so out loud instead
+  # of letting the conversation sink silently to the bottom of the ranking.
+  rt_component <- if (rt == "median") "rt_ratio_median" else "rt_ratio_mean"
+  component_cols <- c("init_ratio", rt_component, "message_ratio",
+                      "end_ratio", "word_ratio")
+
+  incomplete <- joined_df %>%
+    filter(if_any(all_of(component_cols), is.na))
+
+  if (nrow(incomplete) > 0) {
+    detail <- vapply(seq_len(nrow(incomplete)), function(i) {
+      missing <- component_cols[is.na(unlist(incomplete[i, component_cols]))]
+      paste0("  - ", incomplete$other_recipient[i],
+             " (missing: ", paste(missing, collapse = ", "), ")")
+    }, character(1))
+
+    shown <- utils::head(detail, 5)
+    more <- if (length(detail) > 5) {
+      paste0("\n  ... and ", length(detail) - 5, " more")
+    } else ""
+
+    warning(nrow(incomplete), " conversation(s) could not be scored on every ",
+            "component, so their `dbi` is NA:\n",
+            paste(shown, collapse = "\n"), more,
+            "\nThis happens when only one person initiated or ended every ",
+            "exchange, which is common when sec_threshold (currently ",
+            sec_threshold, "s / ", round(sec_threshold / 3600, 1), "h) is ",
+            "longer than any silence in the thread, which makes the whole ",
+            "conversation count as a single exchange. Try a shorter ",
+            "sec_threshold to score these. The rows are kept, and their other ",
+            "components are still valid.",
+            call. = FALSE)
+  }
+
   # ---- 7. Transform: log, then scale -------------------------------------
   # Log makes the ratios symmetric: texting 2x as much (+log 2) and half as
   # much (-log 2) sit equidistant from 0 instead of 2 vs 0.5.

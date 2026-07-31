@@ -36,12 +36,22 @@ init_ratio, rt_ratio) that must sum to 1. NA (default) uses the
 CFA-derived empirical weights.}
 
 \item{rt}{Which response-time summary feeds the index: "median" (default,
-robust to outliers) or "mean".}
+robust to outliers) or "mean".
+
+A conversation can fail to produce one of the five components, in which case
+its \code{dbi} is NA and a warning names it. This happens when only one
+person ever initiated (or ended) an exchange, so there is no ratio to take.
+The usual cause is \code{sec_threshold} being long relative to how that pair
+texts: if no silence in the thread ever exceeds it, the entire conversation
+collapses into one exchange with a single initiator and a single ender.
+Shortening \code{sec_threshold} generally resolves it. Such rows are kept
+rather than dropped — their other components are still valid.}
 }
 \value{
 A data frame with one row per conversation, ranked by descending
 \code{dbi}, containing the raw ratios, their log/z transforms, and the
-final \code{dbi} score.
+final \code{dbi} score. Conversations missing a component keep their row
+with \code{dbi = NA}; see the note above.
 }
 \description{
 Main analysis entry point. Takes a message-level data frame (e.g. the output
