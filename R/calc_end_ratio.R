@@ -24,14 +24,14 @@ calc_end_ratio <- function(sentences,
 
 
 
-  # ---- 1. turns and exchanges ---------------------------------------------
+
   # this one leans on the lag() inside segment_turns(): it keeps the final
   # unanswered turn attached to the exchange it closed, so the last row of
   # each exchange tells us who let it drop
   data_prep <- segment_turns(sentences, sec_threshold = sec_threshold)
 
 
-  # ---- 2. who ended each exchange ------------------------------------------
+
   # last(recipient) is whoever got the final turn and didn't reply - they're
   # the one who ended it by going quiet. n() == 2 drops conversations where
   # only one person ever did that, since there's no ratio to take.
@@ -44,8 +44,8 @@ calc_end_ratio <- function(sentences,
               .groups = "drop_last") %>%
     group_by(convo_num) %>%
     filter(n() == 2)
-  
-  # ---- 3. the ratio --------------------------------------------------------
+
+
   # speaker_end is the person who ended the exchange, so end_speaker counts
   # the ones the focal speaker let die and end_other counts the ones the other
   # person did. other/speaker, so higher = they drop conversations on you more
@@ -59,8 +59,8 @@ calc_end_ratio <- function(sentences,
               other_recipient = first(speaker_end[speaker_end != speaker_str]),
               .groups = "drop_last") %>%
     arrange(desc(end_ratio))
-  
-  
+
+
   return(data_ratio)
-  
+
 }

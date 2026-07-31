@@ -28,13 +28,13 @@ calc_rt_ratio <- function(sentences,
 
 
 
-  # ---- 1. turns and exchanges ---------------------------------------------
+
   # valid_response_time is the column that matters here - response_time with
   # the over-threshold gaps already blanked out
   data_prep <- segment_turns(sentences, sec_threshold = sec_threshold)
 
 
-  # ---- 2. response times per person ----------------------------------------
+
   # grouping by recipient, not speaker: the response_time attached to a turn
   # measures how fast whoever RECEIVED it wrote back. so the rows where
   # recipient == speaker_str are the focal speaker's own reply times. NaN
@@ -50,7 +50,7 @@ calc_rt_ratio <- function(sentences,
     filter(!is.na(mean_rt))
 
 
-  # ---- 3. one row per conversation -----------------------------------------
+
   # n() == 2 needs both people to have at least one real response time.
   # other/speaker, so > 1 means the focal speaker is the faster replier.
   data_rt_ratio <- data_sum %>%
@@ -70,8 +70,8 @@ calc_rt_ratio <- function(sentences,
     ) %>%
     relocate(convo_num, other_recipient, rt_ratio_mean, rt_ratio_median)
 
-  
-  # ---- 4. sort -------------------------------------------------------------
+
+
   # no else branch: anything other than median/mean leaves final_data
   # undefined. dbi() validates rt before calling, so nothing else gets here
   # through the normal path.
@@ -82,8 +82,8 @@ calc_rt_ratio <- function(sentences,
     final_data <- data_rt_ratio %>%
       arrange(desc(rt_ratio_mean))
   }
-  
+
   return(final_data)
-  
-    
+
+
 }

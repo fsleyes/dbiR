@@ -56,7 +56,7 @@ plot_dbi_components <- function(dbi_df,
                                 ncol = 4,
                                 subtitle = NULL) {
 
-  # ---- 0. validate ---------------------------------------------------------
+
   if (!rt %in% c("median", "mean")) {
     stop("`rt` must be \"median\" or \"mean\".")
   }
@@ -82,7 +82,7 @@ plot_dbi_components <- function(dbi_df,
          "?")
   }
 
-  # ---- 1. one row per partner, top n --------------------------------------
+
   # dbi() is keyed on (convo_num, other_recipient), so someone can turn up on
   # more than one row. sort first, then take the first occurrence, so each
   # person appears once at their highest score.
@@ -96,7 +96,7 @@ plot_dbi_components <- function(dbi_df,
     stop("No scored conversations to plot.")
   }
 
-  # ---- 2. long format, one row per partner x component ---------------------
+
   # labels are phrased about the focal speaker so a positive bar can be read
   # straight off the strip without going back to the docs
   component_labels <- c(
@@ -124,7 +124,7 @@ plot_dbi_components <- function(dbi_df,
       leaning = if_else(value > 0, "speaker", "partner")
     )
 
-  # ---- 3. color ------------------------------------------------------------
+
   # diverging rather than categorical - these are two ends of one axis, so a
   # warm/cool pair meeting at the zero line. warm marks the direction the
   # index is actually about.
@@ -132,7 +132,7 @@ plot_dbi_components <- function(dbi_df,
   lean_labels <- c("speaker" = paste(speaker_label, "lean in more"),
                    "partner" = paste(partner_label, "lean in more"))
 
-  # ---- 4. plot -------------------------------------------------------------
+
   plot <- plot_data %>%
     ggplot(mapping = aes(x = value, y = component, fill = leaning)) +
     geom_col(width = 0.65) +

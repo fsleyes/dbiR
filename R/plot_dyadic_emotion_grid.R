@@ -69,7 +69,7 @@ plot_dyadic_emotion_grid <- function(data,
                                      lookup = lookup_Jul25,
                                      subtitle = NULL) {
 
-  # ---- 0. validate ---------------------------------------------------------
+
   # cheap checks that turn three different downstream failures (empty plot,
   # recycled color vector, "object not found") into one readable message
   if (length(people) != 2) {
@@ -82,7 +82,7 @@ plot_dyadic_emotion_grid <- function(data,
          paste(missing_cols, collapse = ", "))
   }
 
-  # ---- 1. narrow to the pair, attach norms ---------------------------------
+
   # both speaker AND recipient have to be in `people`, otherwise messages
   # either of them sent to someone else leak in
   data_prep <- data %>%
@@ -94,7 +94,7 @@ plot_dyadic_emotion_grid <- function(data,
     stop("No messages found between ", people[1], " and ", people[2], ".")
   }
 
-  # ---- 2. long format, z-score within each emotion -------------------------
+
   # scaling per emotion is what makes the shared y-axis legible at all - the
   # raw norm values sit on different ranges per dimension, so the facets
   # couldn't share a scale otherwise. words that missed the join are dropped
@@ -114,12 +114,12 @@ plot_dyadic_emotion_grid <- function(data,
            # same for speakers, so colors stay put across calls
            speaker = factor(speaker, levels = people))
 
-  # ---- 3. color ------------------------------------------------------------
+
   # identity palette, two hues that stay apart under the common forms of
   # color vision deficiency (green/red does not)
   speaker_colors <- setNames(c("#2a78d6", "#eb6834"), people)
 
-  # ---- 4. plot -------------------------------------------------------------
+
   plot <- data_long %>%
     ggplot(mapping = aes(x = datetime, y = sentiment_z, color = speaker)) +
     # z = 0 is each speaker's own average for that emotion, so this line is

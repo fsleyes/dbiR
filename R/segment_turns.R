@@ -39,7 +39,7 @@
 segment_turns <- function(sentences, sec_threshold = 172800) {
 
   sentences %>%
-    # ---- 1. find turn boundaries -------------------------------------------
+
     # a turn breaks when the sender changes, or after a silence longer than
     # the threshold. cumsum over the breakpoints numbers them.
     group_by(convo_num) %>%
@@ -50,7 +50,7 @@ segment_turns <- function(sentences, sec_threshold = 172800) {
              prev_gap > sec_threshold,
            turn_id = cumsum(new_turn)) %>%
 
-    # ---- 2. one row per turn -----------------------------------------------
+
     # every message in a turn has the same sender, so first() is fine for the
     # participant columns. the two timestamps bracket the turn.
     group_by(convo_num, turn_id) %>%
@@ -62,7 +62,7 @@ segment_turns <- function(sentences, sec_threshold = 172800) {
               .groups = "drop_last") %>%
     filter(!is.na(turn_start)) %>%
 
-    # ---- 3. chain turns into exchanges -------------------------------------
+
     # response_time is how long the OTHER person took to answer this turn.
     # anything over the threshold isn't a reply, it's the conversation dying:
     # it starts a new exchange and gets blanked out of valid_response_time so

@@ -37,7 +37,7 @@ plot_convo <- function(data, people, sentiment) {
 
   sent_label <- sentiment
 
-  # ---- 1. narrow to the pair, attach norms ---------------------------------
+
   # both speaker AND recipient have to be in `people`, otherwise messages
   # either of them sent to someone else leak in. words missing from the norms
   # table join to NA, which geom_smooth drops on its own.
@@ -47,20 +47,20 @@ plot_convo <- function(data, people, sentiment) {
     left_join(lookup_Jul25, by = c("word_clean" = "word"))
 
 
-  
-  
-  # ---- 2. plot -------------------------------------------------------------
+
+
+
   # z-scoring puts the dimensions on a comparable scale, so two plots of
   # different sentiments can be read against each other. colors go in
   # `people` order.
   plot <- data_prep %>%
     mutate(sentiment_z = scale(.data[[sentiment]])) %>%
     ggplot(mapping = aes(x = datetime, y = sentiment_z, color = speaker)) +
-    geom_smooth(se = FALSE) + 
+    geom_smooth(se = FALSE) +
     scale_color_manual(values = setNames(c("forestgreen", "red"), people)) +
     labs(
       y = sent_label
     )
-  
+
   return(plot)
 }
