@@ -22,17 +22,55 @@ This is the annoying part, and it's not something the package can do for you.
 Use [imessage-exporter](https://github.com/ReagentX/imessage-exporter):
 
 ```bash
-imessage-exporter -f txt -o ~/imessage_export
+imessage-exporter -f txt -c disabled -o ~/imessage_export
 ```
+
+Those three flags are the ones that matter:
+
+| flag | why |
+|---|---|
+| `-f txt` | The parser reads the plain-text format. HTML will not work. |
+| `-c disabled` | Don't copy attachments. This is already the default, but it's worth being explicit — the alternatives (`clone`, `basic`, `full`) duplicate every photo and video you have ever sent, which can run to tens of gigabytes and takes a long time. The package doesn't look at the files either way. |
+| `-o <dir>` | Where to put the export. Anywhere is fine; this is the directory you hand to `read_imessages()`. |
 
 You'll get one `.txt` file per conversation, named after the participants'
 phone numbers. `dbiR` expects that directory as-is.
 
-A few threads get dropped on the way in, deliberately: group chats (more than
+Note that `-c disabled` stops the *files* being copied, but the exported text
+still contains a line with the original attachment path wherever you sent one.
+Those lines are stripped for you by `read_imessages(remove_attach = TRUE)`,
+which is the default. Pass `remove_attach = FALSE` if you'd rather count them
+as messages.
+
+### Flags to avoid
+
+Two options change how the exporter labels you, and both break the parser:
+
+- **`-m` / `--custom-name`** renames "Me" to whatever you pass. The package
+  does that rename itself, via `read_imessages(speaker_name = )`.
+- **`-i` / `--use-caller-id`** replaces "Me" with your phone number. Every
+  thread then looks like it has an unsaved contact in it, and all of them get
+  dropped.
+
+Leave both off and let the export say "Me".
+
+### If you get back fewer conversations than you expected
+
+Some threads are dropped on the way in, deliberately: group chats (more than
 two people breaks every ratio the package computes), threads with only one
 speaker, and threads where a participant is identified by a bare phone number
-instead of a saved contact name. If you get fewer conversations back than you
-expected, that's usually why.
+instead of a saved contact name.
+
+That last one is usually the big one, and it is worth knowing about before you
+conclude the package is broken. On my own export, 854 files came down to 221
+usable conversations, and most of the loss was contacts my phone had never
+resolved to a name. If your contacts aren't being picked up at all, the
+exporter takes `-n <path>` to point at an address book database
+(`AddressBook-v22.abcddb` on macOS) explicitly.
+
+You can also narrow the export up front with `-t` (filter to specific
+contacts) or `-s` / `-e` (date bounds), though `dbi()` can do the date
+filtering later with `date_min` and `date_max`.
 
 ## Using it
 
