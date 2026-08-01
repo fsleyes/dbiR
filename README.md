@@ -207,6 +207,20 @@ one lopsided in each direction, one balanced, and one that exercises the
 parser's handling of tapbacks, attachments, read receipts, and multi-paragraph
 messages. The derivations are in `inst/extdata/README.md`.
 
+## Acknowledgements
+
+A big thank you to the people who listened to me yap endlessly about this project and provided valuable feedback (in no particular order):
+
+Kevin Trent
+Valerie Polad
+Olivia Bishop
+Jamie Reilly
+Leia Donaway
+Brooke Cullen
+Kristin Pischel
+Cody Cushing
+Isabel Leiva
+
 ## License
 
 MIT.
